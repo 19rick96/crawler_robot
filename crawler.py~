@@ -70,8 +70,8 @@ class MLP(object):
 		for i in range(0,len(self.mat)):
 			l = np.append(l,[1.0])
 			l_new = np.dot(l,self.mat[i])
-			#l = sigmoid(l_new)
-			l = l_new
+			l = sigmoid(l_new)
+			#l = l_new
 		return l
 
 fnn = MLP([5,4],2,1.0)

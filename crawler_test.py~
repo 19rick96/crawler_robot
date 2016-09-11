@@ -70,8 +70,8 @@ class MLP(object):
 		for i in range(0,len(self.mat)):
 			l = np.append(l,[1.0])
 			l_new = np.dot(l,self.mat[i])
-			#l = sigmoid(l_new)
-			l = l_new
+			l = sigmoid(l_new)
+			#l = l_new
 		return l
 
 fnn = MLP([5,4],2,1.0)
@@ -86,62 +86,7 @@ def feedforward(inp1,inp2):
 	inp.append(inp2)
 	out = fnn.feedforward_(inp)
 	return out[0],out[1]
-
-# GA ############################################################
-def mutate_weights(arr,mut):
-	for j in range(0,mut):
-		i = random.randint(0,len(arr)-1)
-		a = random.randint(0,9)
-		arr[i] = a
-	return arr
-
-def n_point_crossover(n,arr1,arr2):
-	points = random.sample(range(1,len(arr1)-1),n)
-	child = []
-	init = 0
-	points = sorted(points)
-	for i in range(0,len(points)):
-		ch = random.randint(0,1)
-		if ch == 0:
-			for j in range(init,points[i]):
-				child.append(arr1[j])
-		else :
-			for j in range(init,points[i]):
-				child.append(arr2[j])
-		init = points[i]
-	ch = random.randint(0,1)
-	if ch == 0:
-		for j in range(init,len(arr1)):
-			child.append(arr1[j])
-	else :
-		for j in range(init,len(arr2)):
-			child.append(arr2[j])
-	child = np.asarray(child)
-	return child
-
-def form_mating_pool(parent_pop,population,fit_arr):
-	# stochastic universal sampling
-	segments = []
-	total = 0
-	for i in range(0,len(population)):
-		total = total + fit_arr[i]
-		segments.append(total)
-	segments = np.asarray(segments)
-	dist = total/parent_pop
-	pointer = random.uniform(0.0,dist)
-	parents = []
-	for i in range(0,parent_pop):
-		ind = 0
-		par = pointer + i*dist
-		for j in range(1,len(segments)):
-			if par<segments[j]:
-				ind = j
-				break
-		parents.append(population[ind])
-	parents = np.asarray(parents)
-	return parents
-
-############################################################################
+#######################################################################################
 pygame.init()
  
 BLACK = (  0,   0,   0)
@@ -261,90 +206,29 @@ def animate(theta1,theta2,w1,w2,w=2.0):
 	theta2 = clamp(theta2,-90.0,90.0)
 	return theta1,theta2
 
-def fitness(arr):
-	#d1_old = np.random.uniform(-90.0,90.0)
-	#d2_old = np.random.uniform(-90.0,90.0)
-	d1_old = 60
-	d2_old = -60
-	fl = 0
-	clock.tick(60)
-	screen.fill(WHITE)
-	pygame.draw.line(screen, BLACK, [0,600],[700,600], 2)
-	th1 = d1_old*0.0174533
-	th2 = d2_old*0.0174533
-	robot1.draw(th1,th2)
-	pygame.display.flip()
-	fnn.chromo2mat(arr)
-	for i in range(0,350):
-		w1,w2 = feedforward(d1_old,d2_old)
-		d1_new,d2_new = animate(d1_old,d2_old,w1,w2)
-		d1_old = d1_new
-		d2_old = d2_new
-	f = robot1.reset()
-	return f
+arr = [5 ,9, 0, 6, 1, 9, 8, 8, 3, 0, 3, 7, 1, 4, 9, 8, 3, 1, 3, 8, 0, 8, 6, 1, 1, 9, 2, 0, 6, 9, 4, 1, 9, 2, 2, 6, 6,
+ 1, 8, 7, 2, 9, 6, 7, 2, 6, 1, 7, 5, 9, 9, 5, 7, 0, 1, 5, 1, 0, 0, 8, 1, 6, 2, 6, 2, 6, 1, 4, 9, 9, 6, 4, 1, 7,
+ 3, 2, 6, 4, 7, 8, 9, 1, 9, 8, 4, 9, 4, 7, 4, 0, 1, 6, 3, 7, 6, 5, 2, 9, 9, 0, 6, 3, 3, 7, 9, 1, 2, 7, 3, 6, 4,
+ 9, 9, 6, 5, 9, 2, 9, 1, 0, 6, 6, 4, 9, 9, 1, 2, 0, 2, 4, 3, 3, 6, 0, 7, 2, 2, 2, 5, 6, 1, 0, 2, 1, 1, 3, 0, 2,
+ 5, 1, 2, 0, 1, 2, 2, 3, 4, 9, 6, 3, 9, 3, 1, 3, 1, 9, 4, 4, 6, 8, 1, 9, 8, 7, 4, 2, 8, 5, 1, 5, 4, 1, 9, 5, 3,
+ 0, 8, 4, 4, 7, 7, 6, 6, 4, 9, 6, 3, 7, 7, 0, 9, 8, 0, 7, 4, 8, 4, 6, 1, 0, 7, 8, 1, 6, 7, 9, 6, 8, 0, 1, 9, 3,
+ 4, 0, 5, 4, 1, 0, 6, 4, 0, 4, 8, 9, 4, 6, 5, 8, 9, 4, 1, 7, 4, 0, 5]
 
-population = []
-for i in range(0,pop):
-	a = np.random.randint(10,size=chromo_s)
-	population.append(a)
-
-fitness_arr = []
-
-for i in range(0,len(population)):
-	f = fitness(population[i])
-	fitness_arr.append(f)
-	print "initial  %d    %f"%(i+1,f)
-print fitness_arr
-
-children = []
-parents = form_mating_pool(parent_num,population,fitness_arr)
-for j in range(0,2):
-	random.shuffle(parents)
-	for i in range(0,len(parents)/2):
-		c1 = mutate_weights(parents[2*i],13)
-		c2 = mutate_weights(parents[(2*i)+1],13)
-		c3 = n_point_crossover(4,c1,c2)
-		children.append(c3)
-
-generations = 50
-gen_itr = 0
-
-while gen_itr<generations:
-	gen_itr = gen_itr + 1
-	fit_child_arr = []
-	for i in range(0,len(children)):
-		f = fitness(children[i])
-		fit_child_arr.append(f)
-		print "%d   gen  children  %d   %f"%(gen_itr,i+1,f)
-	temp = []
-	for i in range(0,len(population)):
-		elem = []
-		elem.append(population[i])
-		elem.append(fitness_arr[i])
-		temp.append(elem)
-	for i in range(0,len(children)):
-		elem = []
-		elem.append(children[i])
-		elem.append(fit_child_arr[i])
-		temp.append(elem)
-	#elitist approach
-	temp = sorted(temp,key=operator.itemgetter(1),reverse=True)
-	print "%d     %f"%(gen_itr,temp[0][1])
-	print temp[0][0]
-	best = np.asarray(temp[0][0])
-	np.savetxt(outfile,best,fmt='%-7.4f')
-	population = []
-	fitness_arr = []
-	for i in range(0,pop):
-		population.append(temp[i][0])
-		fitness_arr.append(temp[i][1])		
-	children = []
-	parents = form_mating_pool(parent_num,population,fitness_arr)
-	for j in range(0,2):
-		random.shuffle(parents)
-		for i in range(0,len(parents)/2):
-			c1 = mutate_weights(parents[2*i],13)
-			c2 = mutate_weights(parents[(2*i)+1],13)
-			c3 = n_point_crossover(4,c1,c2)
-			children.append(c3)
+d1_old = np.random.uniform(-90.0,90.0)
+d2_old = np.random.uniform(-60.0,90.0)
+#d1_old = 60
+#d2_old = -60
+clock.tick(60)
+screen.fill(WHITE)
+pygame.draw.line(screen, BLACK, [0,600],[700,600], 2)
+th1 = d1_old*0.0174533
+th2 = d2_old*0.0174533
+robot1.draw(th1,th2)
+pygame.display.flip()
+fnn.chromo2mat(arr)
+for i in range(0,10000):
+	w1,w2 = feedforward(d1_old,d2_old)
+	d1_new,d2_new = animate(d1_old,d2_old,w1,w2)
+	d1_old = d1_new
+	d2_old = d2_new
 

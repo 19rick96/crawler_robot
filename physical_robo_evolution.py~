@@ -1,4 +1,3 @@
-import pygame
 from math import pi
 import math
 import numpy as np
@@ -6,13 +5,25 @@ import random
 import operator
 import cPickle as pickle
 import sys
+import serial
+import time
+import cv2
 
-num_weights = 49
-chromo_s = 5 * num_weights
-pop = 60
-parent_num = 40
+ser = serial.Serial("/dev/ttyACM0",9600)
 
-outfile = file('chromosomes_robot2.txt','w')
+#initialize camera
+cap = cv2.VideoCapture(1)
+cv2.namedWindow('camera')
+
+#green for detecting forward movement of robot
+lower_green = np.array([40,55,0])
+upper_green = np.array([75,200,255])
+
+#communicate with arduino(servo angles)
+def send_msg(ang1,ang2):
+	values = bytearray([ang1,ang2])
+	ser.write(values)
+	time.sleep(0.007)
 
 # neural network###############################################
 def sigmoid(x):
@@ -27,7 +38,7 @@ def clamp(n, minn, maxn):
         return n
 
 class MLP(object):
-	def __init__(self,hid_layer_info,fnn_inp,rang):
+	def __init__(self,hid_layer_info,fnn_inp,rang=1.0):
 		self.mat = []
 		a = np.random.uniform(-1.0*rang,rang,(fnn_inp+1,hid_layer_info[0]))
 		self.mat.append(a)
@@ -36,6 +47,13 @@ class MLP(object):
 			self.mat.append(a)
 		a = np.random.uniform(-1.0*rang,rang,(hid_layer_info[len(hid_layer_info)-1]+1,fnn_inp))
 		self.mat.append(a)
+	
+	def numweights(self):
+		size = 0
+		for i in range(0,len(self.mat)):
+			s = self.mat[i].shape[0]*self.mat[i].shape[1]
+			size = size + s
+		return size		
 
 	def chromo2weight(self,arr):
 		weight = []
@@ -70,22 +88,28 @@ class MLP(object):
 		for i in range(0,len(self.mat)):
 			l = np.append(l,[1.0])
 			l_new = np.dot(l,self.mat[i])
-			#l = sigmoid(l_new)
-			l = l_new
+			l = sigmoid(l_new)
+			#l = l_new
 		return l
 
-fnn = MLP([5,4],2,1.0)
+fnn = MLP([5,4],2)
 
 def feedforward(inp1,inp2):
 	inp1 = clamp(inp1,-60.0,90.0)
 	inp2 = clamp(inp2,-90.0,90.0)
-	#inp1 = (inp1+90.0)/1.0
-	#inp2 = (inp2+90.0)/1.0
 	inp = []
 	inp.append(inp1)
 	inp.append(inp2)
 	out = fnn.feedforward_(inp)
 	return out[0],out[1]
+
+# GA parameters
+num_weights = fnn.numweights()
+chromo_s = 5 * num_weights
+pop = 60
+parent_num = 40
+
+outfile = file('chromosomes_robot_ph.txt','w')
 
 # GA ############################################################
 def mutate_weights(arr,mut):
@@ -141,103 +165,6 @@ def form_mating_pool(parent_pop,population,fit_arr):
 	parents = np.asarray(parents)
 	return parents
 
-############################################################################
-pygame.init()
- 
-BLACK = (  0,   0,   0)
-WHITE = (255, 255, 255)
-BLUE =  (  0,   0, 255)
-GREEN = (  0, 255,   0)
-RED =   (255,   0,   0)
-
-size = [700, 700]
-screen = pygame.display.set_mode(size)
- 
-pygame.display.set_caption("Robot crawler")
-
-done = False
-clock = pygame.time.Clock()
-
-class robot(object):
-	def __init__(self,L=100.0,W=75.0,width=7.0,L1=75.0,L2=100.0,sx=100.0,sy=600.0):
-		self.L = L
-		self.W = W
-		self.width = width
-		self.L1 = L1
-		self.L2 = L2
-		self.phi = math.atan(W/L)	
-		self.sx = sx
-		self.sy = sy
-		self.factor = 0
-		self.reward = 0
-		self.old_x = 0
-		self.itr = 0
-
-	def reset(self):
-		self.itr = 0
-		self.old_x = 0
-		r = self.reward
-		self.reward = 0
-		return r
-
-	def find_coord(self,theta1,theta2):
-		factor = (math.sqrt((self.L**2)+(self.W**2))*math.sin(self.phi)) + (self.L1*math.sin(theta1)) - (self.L2*math.cos(theta2-theta1))
-		f = (self.L2*math.sin(theta2-theta1)) - (self.L1*math.cos(theta1)) - (math.sqrt((self.L**2)+(self.W**2))*math.cos(self.phi))
-		factor = factor/f
-		self.factor = factor
-		theta = math.atan(factor)
-		if theta >= 0:
-			#print "theta not 0"
-			p1 = []
-			p2 = []
-			p3 = []
-			p4 = []
-			p5 = []
-			p1.append(self.sx)
-			p1.append(self.sy)
-			p2.append(self.sx + (self.L*math.cos(theta)))
-			p2.append(self.sy - (self.L*math.sin(theta)))
-			p3.append(self.sx + (math.sqrt((self.L**2)+(self.W**2))*math.cos(theta+self.phi)))
-			p3.append(self.sy - (math.sqrt((self.L**2)+(self.W**2))*math.sin(theta+self.phi)))
-			p4.append(p3[0] + (self.L1*math.cos(theta1 + theta)))
-			p4.append(p3[1] - (self.L1*math.sin(theta1 + theta)))
-			p5.append(p4[0] + (self.L2*math.cos((pi/2) + theta2 - theta1 - theta)))
-			p5.append(p4[1] + (self.L2*math.sin((pi/2) + theta2 - theta1 - theta)))
-			if self.itr != 0:
-				self.reward = self.reward + self.old_x - p5[0]
-			self.old_x = p5[0]
-			self.itr = self.itr + 1
-			return p1,p2,p3,p4,p5
-		else : 
-			#print "theta 0"
-			theta = 0
-			p1 = []
-			p2 = []
-			p3 = []
-			p4 = []
-			p5 = []
-			p1.append(self.sx)
-			p1.append(self.sy)
-			p2.append(self.sx + (self.L*math.cos(theta)))
-			p2.append(self.sy - (self.L*math.sin(theta)))
-			p3.append(self.sx + (math.sqrt((self.L**2)+(self.W**2))*math.cos(theta+self.phi)))
-			p3.append(self.sy - (math.sqrt((self.L**2)+(self.W**2))*math.sin(theta+self.phi)))
-			p4.append(p3[0] + (self.L1*math.cos(theta1 + theta)))
-			p4.append(p3[1] - (self.L1*math.sin(theta1 + theta)))
-			p5.append(p4[0] + (self.L2*math.cos((pi/2) + theta2 - theta1 - theta)))
-			p5.append(p4[1] + (self.L2*math.sin((pi/2) + theta2 - theta1 - theta)))
-			self.itr = 0
-			return p1,p2,p3,p4,p5
-
-	def draw(self,theta1,theta2):
-		p1,p2,p3,p4,p5 = self.find_coord(theta1,theta2)
-		pygame.draw.line(screen,RED,[int(p1[0]),int(p1[1])],[int(p2[0]),int(p2[1])],int(self.width))
-		pygame.draw.line(screen,RED,[int(p2[0]),int(p2[1])],[int(p3[0]),int(p3[1])],int(self.width))
-		pygame.draw.line(screen,BLACK,[int(p3[0]),int(p3[1])],[int(p4[0]),int(p4[1])],4)
-		pygame.draw.line(screen,BLACK,[int(p4[0]),int(p4[1])],[int(p5[0]),int(p5[1])],4)
-
-robot1 = robot()
-
 def animate(theta1,theta2,w1,w2,w=2.0):
 	if w1>0.5:
 		theta1 = theta1 + w
@@ -247,40 +174,87 @@ def animate(theta1,theta2,w1,w2,w=2.0):
 		theta2 = theta2 + w
 	if w2<0.5:
 		theta2 = theta2 - w
-	clock.tick(60)
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT: 
-			sys.exit(0)
-	screen.fill(WHITE)
-	pygame.draw.line(screen, BLACK, [0,600],[700,600], 2)
-	th1 = theta1*0.0174533
-	th2 = theta2*0.0174533
-	robot1.draw(th1,th2)
-	pygame.display.flip()	
+
+	send_msg(90 + theta1,90 + theta2)	
 	theta1 = clamp(theta1,-60.0,90.0)
 	theta2 = clamp(theta2,-90.0,90.0)
 	return theta1,theta2
 
 def fitness(arr):
-	#d1_old = np.random.uniform(-90.0,90.0)
-	#d2_old = np.random.uniform(-90.0,90.0)
+
+	d_initial = 0
+	d_final = 0
+	_, frame = cap.read()
+	img  = frame.copy()
+	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+	mask = cv2.inRange(hsv, lower_green, upper_green)
+	#mask = cv2.erode(mask, None, iterations=2)
+	#mask = cv2.dilate(mask, None, iterations=2)
+	cnts = cv2.findContours(mask.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[-2]
+	center = None
+	if len(cnts) > 0:
+		c = sorted(cnts, key=cv2.contourArea,reverse=True)
+		if len(c)<2:
+			return -1
+		else:
+			((x1,y1),radius1) = cv2.minEnclosingCircle(c[0])
+			((x2,y2),radius2) = cv2.minEnclosingCircle(c[1])
+			cv2.circle(img, (int(x1), int(y1)), int(radius1),(0, 255, 255), 2)
+			cv2.circle(img, (int(x2), int(y2)), int(radius2),(0, 255, 255), 2)
+			d_initial = abs(x2-x1)
+
+	cv2.imshow('camera',img)
+
 	d1_old = 60
 	d2_old = -60
-	fl = 0
-	clock.tick(60)
-	screen.fill(WHITE)
-	pygame.draw.line(screen, BLACK, [0,600],[700,600], 2)
-	th1 = d1_old*0.0174533
-	th2 = d2_old*0.0174533
-	robot1.draw(th1,th2)
-	pygame.display.flip()
+	send_msg(90 + d1_old,90 + d2_old)
+	time.sleep(0.2)
 	fnn.chromo2mat(arr)
 	for i in range(0,350):
+		_, frame = cap.read()
+		img  = frame.copy()
+		hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+		mask = cv2.inRange(hsv, lower_green, upper_green)
+		cnts = cv2.findContours(mask.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[-2]
+		center = None
+		if len(cnts) > 0:
+			c = sorted(cnts, key=cv2.contourArea,reverse=True)
+			if len(c)<2:
+				asd = 1
+			else:
+				((x1,y1),radius1) = cv2.minEnclosingCircle(c[0])
+				((x2,y2),radius2) = cv2.minEnclosingCircle(c[1])
+				cv2.circle(img, (int(x1), int(y1)), int(radius1),(0, 255, 255), 2)
+				cv2.circle(img, (int(x2), int(y2)), int(radius2),(0, 255, 255), 2)
+		cv2.imshow('camera',img)
+
 		w1,w2 = feedforward(d1_old,d2_old)
 		d1_new,d2_new = animate(d1_old,d2_old,w1,w2)
 		d1_old = d1_new
 		d2_old = d2_new
-	f = robot1.reset()
+
+	_, frame = cap.read()
+	img  = frame.copy()
+	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+	mask = cv2.inRange(hsv, lower_green, upper_green)
+	#mask = cv2.erode(mask, None, iterations=2)
+	#mask = cv2.dilate(mask, None, iterations=2)
+	cnts = cv2.findContours(mask.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[-2]
+	center = None
+	if len(cnts) > 0:
+		c = sorted(cnts, key=cv2.contourArea,reverse=True)
+		if len(c)<2:
+			return -1
+		else:
+			((x1,y1),radius1) = cv2.minEnclosingCircle(c[0])
+			((x2,y2),radius2) = cv2.minEnclosingCircle(c[1])
+			cv2.circle(img, (int(x1), int(y1)), int(radius1),(0, 255, 255), 2)
+			cv2.circle(img, (int(x2), int(y2)), int(radius2),(0, 255, 255), 2)
+			d_final = abs(x2-x1)
+
+	cv2.imshow('camera',img)
+
+	f = d_initial - d_final
 	return f
 
 population = []

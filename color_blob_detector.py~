@@ -1,0 +1,36 @@
+import cv2
+import numpy as np
+
+cap = cv2.VideoCapture(1)
+cv2.namedWindow('camera')
+
+lower_green = np.array([40,55,0])
+upper_green = np.array([75,200,255])
+
+while(1):
+
+	_, frame = cap.read()
+	img  = frame.copy()
+	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+	mask = cv2.inRange(hsv, lower_green, upper_green)
+	mask = cv2.erode(mask, None, iterations=2)
+	mask = cv2.dilate(mask, None, iterations=2)
+	cnts = cv2.findContours(mask.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)[-2]
+	center = None
+	if len(cnts) > 0:
+		c = sorted(cnts, key=cv2.contourArea,reverse=True)
+		((x1,y1),radius1) = cv2.minEnclosingCircle(c[0])
+		if radius1>50:
+			cv2.circle(img, (int(x1), int(y1)), int(radius1),(0, 255, 255), 2)
+		if len(c)>1:
+			(x2,y2),radius2) = cv2.minEnclosingCircle(c[1])
+			if radius2>50:
+				cv2.circle(img, (int(x2), int(y2)), int(radius2),(0, 255, 255), 2)
+	cv2.imshow('camera',img)
+	cv2.imshow('mask',mask)
+	k = cv2.waitKey(5) & 0xFF
+	if k == 27:
+        	break
+
+cv2.destroyAllWindows()
+
