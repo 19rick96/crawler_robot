@@ -7,8 +7,6 @@ import operator
 import cPickle as pickle
 import sys
 
-num_weights = 49
-chromo_s = 5 * num_weights
 pop = 60
 parent_num = 40
 
@@ -27,15 +25,22 @@ def clamp(n, minn, maxn):
         return n
 
 class MLP(object):
-	def __init__(self,hid_layer_info,fnn_inp,rang):
+	def __init__(self,hid_layer_info,fnn_inp,fnn_op,rang=1.0):
 		self.mat = []
 		a = np.random.uniform(-1.0*rang,rang,(fnn_inp+1,hid_layer_info[0]))
 		self.mat.append(a)
 		for i in range(1,len(hid_layer_info)):
 			a = np.random.uniform(-1.0*rang,rang,(hid_layer_info[i-1]+1,hid_layer_info[i]))
 			self.mat.append(a)
-		a = np.random.uniform(-1.0*rang,rang,(hid_layer_info[len(hid_layer_info)-1]+1,fnn_inp))
+		a = np.random.uniform(-1.0*rang,rang,(hid_layer_info[len(hid_layer_info)-1]+1,fnn_op))
 		self.mat.append(a)
+
+	def numweights(self):
+		size = 0
+		for i in range(0,len(self.mat)):
+			s = self.mat[i].shape[0]*self.mat[i].shape[1]
+			size = size + s
+		return size
 
 	def chromo2weight(self,arr):
 		weight = []
@@ -74,9 +79,9 @@ class MLP(object):
 			#l = l_new
 		return l
 
-fnn = MLP([5,4],2,1.0)
+fnn = MLP([6],4,2)
 
-def feedforward(inp1,inp2):
+def feedforward(inp1,inp2,inp3,inp4):
 	inp1 = clamp(inp1,-60.0,90.0)
 	inp2 = clamp(inp2,-90.0,90.0)
 	#inp1 = (inp1+90.0)/1.0
@@ -84,10 +89,15 @@ def feedforward(inp1,inp2):
 	inp = []
 	inp.append(inp1)
 	inp.append(inp2)
+	inp.append(inp3)
+	inp.append(inp4)
 	out = fnn.feedforward_(inp)
 	return out[0],out[1]
 
 # GA ############################################################
+num_weights = fnn.numweights()
+chromo_s = 5 * num_weights
+
 def mutate_weights(arr,mut):
 	for j in range(0,mut):
 		i = random.randint(0,len(arr)-1)
@@ -266,6 +276,8 @@ def fitness(arr):
 	#d2_old = np.random.uniform(-90.0,90.0)
 	d1_old = 60
 	d2_old = -60
+	w1_o = 0.01
+	w2_o = 0.01
 	fl = 0
 	clock.tick(60)
 	screen.fill(WHITE)
@@ -276,10 +288,12 @@ def fitness(arr):
 	pygame.display.flip()
 	fnn.chromo2mat(arr)
 	for i in range(0,350):
-		w1,w2 = feedforward(d1_old,d2_old)
+		w1,w2 = feedforward(d1_old,d2_old,w1_o,w2_o)
 		d1_new,d2_new = animate(d1_old,d2_old,w1,w2)
 		d1_old = d1_new
 		d2_old = d2_new
+		w1_o = w1
+		w2_o = w2
 	f = robot1.reset()
 	return f
 
