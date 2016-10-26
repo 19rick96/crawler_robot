@@ -14,3 +14,7 @@ When implemented physically, the robot needs to be tracked to measure the displa
 There is another separate green patch which is kept fixed and the distance of robot is measured with reference to this patch. This method makes the distance measurement more immune to camera disturabances.  This measured displacement becomes the fitness value for the chromosome.
 
 It should also be mentioned that Arduino has very low computational power. Hence it has been used only to control the servos. All other computations including that of the neural network are performed on the laptop.
+
+# crawler robot using a formal RNN ( basically optimization of RNN using Genetic Algorithm )
+
+The Neural Network controller in this version is a formal RNN with the possible states encoded using a one-hot vector. For example [1 0 0 0 0 0 0 0 0] means both "theta1" and "theta2" of the two arms decrease. The architecture is much similar to that of a language generation model using RNN. One can experiment using a LSTM or GRU. But since the most important reason for using those architectures is that vanilla RNN s suffer from Gradient explosion (or vanishing) and the experiment here uses Genetic Algorithms, I don't think using LSTM would be advantageous as it will unnecessarily increase the number of parameters. Using NSGA-II and NSGA-III to optimize RNN for multiple objectives is being studied.
